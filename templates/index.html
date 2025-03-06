@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG Chatbot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+    <style>
+        .chat-message {
+            transition: all 0.3s ease;
+            animation: fadeIn 0.5s;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .file-drop-area {
+            position: relative;
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 25px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+
+        .file-drop-area.highlight {
+            border-color: #4F46E5;
+            background-color: rgba(79, 70, 229, 0.05);
+        }
+
+        .file-msg {
+            font-weight: medium;
+            margin-top: 10px;
+            color: #6b7280;
+        }
+        
+        .typing-indicator {
+            display: flex;
+            align-items: center;
+            margin-top: 8px;
+        }
+        
+        .dot {
+            height: 8px;
+            width: 8px;
+            border-radius: 50%;
+            background-color: #4F46E5;
+            margin: 0 2px;
+            animation: bounce 1.2s infinite;
+        }
+        
+        .dot:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+        
+        .dot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+        
+        @keyframes bounce {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-5px); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <!-- Header -->
+        <header class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-indigo-600">RAG Chatbot</h1>
+            <p class="text-gray-600 mt-2">Upload PDFs and ask questions about their content</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Left Panel - File Upload -->
+            <div class="lg:col-span-1 bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-semibold mb-4 text-gray-800">Document Management</h2>
+                
+                <!-- File Upload Area -->
+                <div class="file-drop-area mb-4" id="dropArea">
+                    <i class="fas fa-file-pdf text-4xl text-indigo-500"></i>
+                    <p class="file-msg mt-2">Drag & drop your PDF here or click to browse</p>
+                    <input type="file" id="fileInput" class="hidden" accept=".pdf" />
+                </div>
+                
+                <!-- Upload Button -->
+                <button id="uploadBtn" class="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 transition mb-4 flex items-center justify-center gap-2 disabled:bg-indigo-300 disabled:cursor-not-allowed">
+                    <i class="fas fa-upload"></i>
+                    <span>Upload Document</span>
+                </button>
+                
+                <div id="uploadStatus" class="hidden mb-4 p-3 rounded-md"></div>
+                
+                <!-- Delete Database -->
+                <button id="deleteDbBtn" class="w-full border border-red-500 text-red-500 py-2 px-4 rounded-md hover:bg-red-500 hover:text-white transition flex items-center justify-center gap-2">
+                    <i class="fas fa-trash-alt"></i>
+                    <span>Delete Database</span>
+                </button>
+                
+                <!-- Database Info -->
+                <div class="mt-6 p-4 bg-gray-50 rounded-md">
+                    <h3 class="text-md font-semibold text-gray-700 mb-2">Database Status</h3>
+                    <div id="dbStatus" class="text-sm text-gray-600">
+                        No documents loaded
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Right Panel - Chat Interface -->
+            <div class="lg:col-span-2 bg-white rounded-lg shadow-md flex flex-col h-[600px]">
+                <!-- Chat Header -->
+                <div class="border-b p-4">
+                    <h2 class="text-xl font-semibold text-gray-800">Chat with your documents</h2>
+                    <p class="text-sm text-gray-500">Ask questions about the content of your uploaded PDFs</p>
+                </div>
+                
+                <!-- Chat Messages -->
+                <div id="chatMessages" class="flex-1 p-4 overflow-y-auto">
+                    <div class="chat-message bg-gray-100 p-3 rounded-lg mb-4 max-w-3/4">
+                        <div class="flex items-start">
+                            <div class="flex-shrink-0 mr-3">
+                                <div class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white">
+                                    <i class="fas fa-robot"></i>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="font-semibold text-gray-800">RAG Assistant</div>
+                                <div class="text-gray-700">Hello! Upload a PDF document and I'll help you find answers from its content.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Chat Input -->
+                <div class="border-t p-4">
+                    <form id="queryForm" class="flex gap-2">
+                        <input 
+                            type="text" 
+                            id="queryInput" 
+                            class="flex-1 border border-gray-300 rounded-md px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            placeholder="Ask a question about your document..."
+                            disabled
+                        >
+                        <button 
+                            type="submit" 
+                            id="sendBtn"
+                            class="bg-indigo-600 text-white py-2 px-6 rounded-md hover:bg-indigo-700 transition disabled:bg-indigo-300 disabled:cursor-not-allowed"
+                            disabled
+                        >
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // DOM Elements
+            const dropArea = document.getElementById('dropArea');
+            const fileInput = document.getElementById('fileInput');
+            const uploadBtn = document.getElementById('uploadBtn');
+            const deleteDbBtn = document.getElementById('deleteDbBtn');
+            const uploadStatus = document.getElementById('uploadStatus');
+            const dbStatus = document.getElementById('dbStatus');
+            const chatMessages = document.getElementById('chatMessages');
+            const queryForm = document.getElementById('queryForm');
+            const queryInput = document.getElementById('queryInput');
+            const sendBtn = document.getElementById('sendBtn');
+            
+            // State variables
+            let selectedFile = null;
+            let databaseExists = false;
+            
+            // Check if database exists on page load
+            checkDatabaseStatus();
+            
+            // File Drop Area Event Listeners
+            dropArea.addEventListener('click', () => fileInput.click());
+            
+            dropArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropArea.classList.add('highlight');
+            });
+            
+            dropArea.addEventListener('dragleave', () => {
+                dropArea.classList.remove('highlight');
+            });
+            
+            dropArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropArea.classList.remove('highlight');
+                
+                if (e.dataTransfer.files.length) {
+                    handleFileSelection(e.dataTransfer.files[0]);
+                }
+            });
+            
+            fileInput.addEventListener('change', () => {
+                if (fileInput.files.length) {
+                    handleFileSelection(fileInput.files[0]);
+                }
+            });
+            
+            // Handle file selection
+            function handleFileSelection(file) {
+                if (file.type !== 'application/pdf') {
+                    showUploadStatus('Please select a PDF file', 'error');
+                    return;
+                }
+                
+                selectedFile = file;
+                document.querySelector('.file-msg').textContent = file.name;
+                uploadBtn.disabled = false;
+            }
+            
+            // Upload Button Event Listener
+            uploadBtn.addEventListener('click', async () => {
+                if (!selectedFile) {
+                    showUploadStatus('No file selected', 'error');
+                    return;
+                }
+                
+                const formData = new FormData();
+                formData.append('file', selectedFile);
+                
+                uploadBtn.disabled = true;
+                showUploadStatus('Uploading and processing file...', 'progress');
+                
+                try {
+                    const response = await fetch('/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        showUploadStatus(data.message, 'success');
+                        selectedFile = null;
+                        document.querySelector('.file-msg').textContent = 'Drag & drop your PDF here or click to browse';
+                        checkDatabaseStatus();
+                    } else {
+                        showUploadStatus(data.error, 'error');
+                    }
+                } catch (error) {
+                    showUploadStatus('Error: ' + error.message, 'error');
+                } finally {
+                    uploadBtn.disabled = false;
+                }
+            });
+            
+            // Delete Database Button Event Listener
+            deleteDbBtn.addEventListener('click', async () => {
+                try {
+                    const response = await fetch('/delete', {
+                        method: 'DELETE'
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        showUploadStatus(data.message, 'success');
+                        checkDatabaseStatus();
+                    } else {
+                        showUploadStatus(data.error, 'error');
+                    }
+                } catch (error) {
+                    showUploadStatus('Error: ' + error.message, 'error');
+                }
+            });
+            
+            // Query Form Event Listener
+            queryForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const query = queryInput.value.trim();
+                if (!query) return;
+                
+                // Add user message to chat
+                addChatMessage('You', query, 'user');
+                
+                // Show typing indicator
+                const typingIndicatorId = showTypingIndicator();
+                
+                // Clear input
+                queryInput.value = '';
+                
+                try {
+                    const response = await fetch('/query', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ query })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    // Remove typing indicator
+                    removeTypingIndicator(typingIndicatorId);
+                    
+                    if (response.ok) {
+                        addChatMessage('RAG Assistant', data.answer, 'assistant');
+                    } else {
+                        addChatMessage('RAG Assistant', 'Error: ' + data.error, 'error');
+                    }
+                } catch (error) {
+                    // Remove typing indicator
+                    removeTypingIndicator(typingIndicatorId);
+                    addChatMessage('RAG Assistant', 'Error: ' + error.message, 'error');
+                }
+            });
+            
+            // Check database status and update UI
+            async function checkDatabaseStatus() {
+                try {
+                    const response = await fetch('/', {
+                        method: 'GET'
+                    });
+                    
+                    if (response.ok) {
+                        // We need to check if the database directory exists
+                        // This is a simple workaround - we try to query with a dummy request
+                        const testResponse = await fetch('/query', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ query: 'test' })
+                        });
+                        
+                        const data = await testResponse.json();
+                        
+                        if (testResponse.ok) {
+                            dbStatus.innerHTML = '<span class="text-green-600">✓ Document database loaded</span>';
+                            databaseExists = true;
+                            queryInput.disabled = false;
+                            sendBtn.disabled = false;
+                        } else if (data.error && data.error.includes('No vector database found')) {
+                            dbStatus.innerHTML = '<span class="text-yellow-600">⚠ No documents loaded</span>';
+                            databaseExists = false;
+                            queryInput.disabled = true;
+                            sendBtn.disabled = true;
+                        } else {
+                            dbStatus.innerHTML = '<span class="text-red-600">⚠ Error checking database</span>';
+                            databaseExists = false;
+                            queryInput.disabled = true;
+                            sendBtn.disabled = true;
+                        }
+                    } else {
+                        dbStatus.innerHTML = '<span class="text-red-600">⚠ Error checking database</span>';
+                        databaseExists = false;
+                        queryInput.disabled = true;
+                        sendBtn.disabled = true;
+                    }
+                } catch (error) {
+                    dbStatus.innerHTML = '<span class="text-yellow-600">⚠ No documents loaded</span>';
+                    databaseExists = false;
+                    queryInput.disabled = true;
+                    sendBtn.disabled = true;
+                }
+            }
+            
+            // Show upload status
+            function showUploadStatus(message, type) {
+                uploadStatus.classList.remove('hidden', 'bg-green-100', 'bg-red-100', 'bg-blue-100');
+                
+                switch (type) {
+                    case 'success':
+                        uploadStatus.classList.add('bg-green-100', 'text-green-700');
+                        uploadStatus.innerHTML = `<i class="fas fa-check-circle mr-2"></i> ${message}`;
+                        break;
+                    case 'error':
+                        uploadStatus.classList.add('bg-red-100', 'text-red-700');
+                        uploadStatus.innerHTML = `<i class="fas fa-exclamation-circle mr-2"></i> ${message}`;
+                        break;
+                    case 'progress':
+                        uploadStatus.classList.add('bg-blue-100', 'text-blue-700');
+                        uploadStatus.innerHTML = `
+                            <div class="flex items-center">
+                                <svg class="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                ${message}
+                            </div>
+                        `;
+                        break;
+                    default:
+                        uploadStatus.classList.add('bg-gray-100', 'text-gray-700');
+                        uploadStatus.textContent = message;
+                }
+                
+                // Hide the status after 5 seconds for success messages
+                if (type === 'success') {
+                    setTimeout(() => {
+                        uploadStatus.classList.add('hidden');
+                    }, 5000);
+                }
+            }
+            
+            // Add message to chat
+            function addChatMessage(sender, message, type) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'chat-message mb-4 max-w-3/4';
+                
+                let bgColor, iconBgColor, icon;
+                
+                switch (type) {
+                    case 'user':
+                        bgColor = 'bg-indigo-50';
+                        messageDiv.className += ' ml-auto';
+                        iconBgColor = 'bg-indigo-500';
+                        icon = 'fa-user';
+                        break;
+                    case 'assistant':
+                        bgColor = 'bg-gray-100'; 
+                        iconBgColor = 'bg-indigo-600';
+                        icon = 'fa-robot';
+                        break;
+                    case 'error':
+                        bgColor = 'bg-red-50';
+                        iconBgColor = 'bg-red-500';
+                        icon = 'fa-exclamation-circle';
+                        break;
+                    default:
+                        bgColor = 'bg-gray-100';
+                        iconBgColor = 'bg-gray-500';
+                        icon = 'fa-comment';
+                }
+                
+                messageDiv.classList.add(bgColor, 'p-3', 'rounded-lg');
+                
+                messageDiv.innerHTML = `
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0 mr-3">
+                            <div class="w-8 h-8 rounded-full ${iconBgColor} flex items-center justify-center text-white">
+                                <i class="fas ${icon}"></i>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="font-semibold text-gray-800">${sender}</div>
+                            <div class="text-gray-700">${formatMessage(message)}</div>
+                        </div>
+                    </div>
+                `;
+                
+                chatMessages.appendChild(messageDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+            
+            // Format message with simple markdown-like formatting
+            function formatMessage(message) {
+                // Replace newlines with <br>
+                message = message.replace(/\n/g, '<br>');
+                
+                // Bold text (between ** **)
+                message = message.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                
+                // Italic text (between * *)
+                message = message.replace(/\*(.*?)\*/g, '<em>$1</em>');
+                
+                return message;
+            }
+            
+            // Show typing indicator
+            function showTypingIndicator() {
+                const indicatorId = 'typing-' + Date.now();
+                const typingDiv = document.createElement('div');
+                typingDiv.id = indicatorId;
+                typingDiv.className = 'chat-message bg-gray-100 p-3 rounded-lg mb-4';
+                typingDiv.innerHTML = `
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0 mr-3">
+                            <div class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white">
+                                <i class="fas fa-robot"></i>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="font-semibold text-gray-800">RAG Assistant</div>
+                            <div class="typing-indicator">
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                chatMessages.appendChild(typingDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+                
+                return indicatorId;
+            }
+            
+            // Remove typing indicator
+            function removeTypingIndicator(indicatorId) {
+                const indicator = document.getElementById(indicatorId);
+                if (indicator) {
+                    indicator.remove();
+                }
+            }
+        });
+    </script>
+</body>
+</html>
