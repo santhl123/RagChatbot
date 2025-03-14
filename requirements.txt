@@ -1,0 +1,11 @@
+flask
+gunicorn
+werkzeug
+langchain-community
+langchain-text-splitters
+langchain-huggingface
+langchain-groq
+python-dotenv
+flask-cors
+faiss-cpu
+sentence-transformers

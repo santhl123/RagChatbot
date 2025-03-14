@@ -1,0 +1,12 @@
+[Unit]
+Description=RAG Chatbot Flask Application
+After=network.target
+
+[Service]
+User=ec2-user
+WorkingDirectory=/home/ec2-user/ragchatbot
+Environment="PATH=/home/ec2-user/ragchatbot/venv/bin"
+ExecStart=/home/ec2-user/ragchatbot/venv/bin/gunicorn -c gunicorn_config.py app:app
+
+[Install]
+WantedBy=multi-user.target
